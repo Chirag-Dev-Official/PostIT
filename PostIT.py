@@ -1,123 +1,78 @@
 import streamlit as st
 import json
 import os
-from datetime import datetime
-from PIL import Image
 
-# --- 🎨 PAGE CONFIG ---
-st.set_page_config(page_title="PostIT Secure 🔒", page_icon="📝", layout="wide")
+# 1. Setup Page
+st.set_page_config(page_title="PostIT Social", page_icon="🌐")
 
-# --- 📂 DATA STORAGE (The "Memory" of your app) ---
-USER_DB = "users.json"
+# 2. Database Helper
+DB_FILE = 'users.json'
 
-def load_users():
-    if os.path.exists(USER_DB):
-        with open(USER_DB, "r") as f:
-            return json.load(f)
-    return {}
+def load_data():
+    if not os.path.exists(DB_FILE):
+        return {}
+    with open(DB_FILE, 'r') as f:
+        return json.load(f)
 
-def save_user(username, password):
-    users = load_users()
-    users[username] = password
-    with open(USER_DB, "w") as f:
-        json.dump(users, f)
+def save_data(data):
+    with open(DB_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
 
-# --- 🔑 LOGIN / SIGNUP SYSTEM ---
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
+# 3. App Logic
+st.title("🌐 PostIT: Social Media")
 
-if not st.session_state.logged_in:
-    st.title("🛡️ Welcome to PostIT Secure")
+if 'user' not in st.session_state:
+    st.session_state.user = None
+
+if not st.session_state.user:
+    menu = ["Login", "Sign Up"]
+    choice = st.sidebar.selectbox("Menu", menu)
     
-    tab1, tab2 = st.tabs(["Login", "Create Account"])
+    username = st.text_input("Username")
+    password = st.text_input("Password", type='password')
     
-    with tab2:
-        new_user = st.text_input("Choose a Username", placeholder="Put your username here...")
-        new_pass = st.text_input("Create a Password", type="password")
-        if st.button("✨ Sign Up"):
-            users = load_users()
-            if new_user in users:
+    if choice == "Sign Up":
+        if st.button("Create Account"):
+            data = load_data()
+            if username in data:
                 st.error("Username already exists!")
-            elif new_user and new_pass:
-                save_user(new_user, new_pass)
-                st.success("Account created! Now go to the Login tab.")
             else:
-                st.warning("Please fill both boxes!")
-
-    with tab1:
-        login_user = st.text_input("Username", placeholder="Enter your username...")
-        login_pass = st.text_input("Password", type="password")
-        if st.button("🚀 Enter PostIT"):
-            users = load_users()
-            if login_user in users and users[login_user] == login_pass:
-                st.session_state.logged_in = True
-                st.session_state.current_user = login_user
+                data[username] = {"password": password, "posts": []}
+                save_data(data)
+                st.success("Account created! Please Login.")
+    else:
+        if st.button("Login"):
+            data = load_data()
+            if username in data and data[username]["password"] == password:
+                st.session_state.user = username
                 st.rerun()
             else:
-                st.error("Invalid Username or Password!")
-    st.stop() # Stops the rest of the app from running until logged in
+                st.error("Invalid credentials")
 
-# --- 📱 MAIN POSTIT APP (Only visible after login) ---
-current_user = st.session_state.current_user
-
-with st.sidebar:
-    st.title("📝 PostIT")
-    st.write(f"Logged in as: **{current_user}**")
-    if st.button("🚪 Logout"):
-        st.session_state.logged_in = False
+else:
+    st.sidebar.write(f"Logged in as: **{st.session_state.user}**")
+    if st.sidebar.button("Logout"):
+        st.session_state.user = None
         st.rerun()
-    st.divider()
-    st.info("Bengaluru Dev Edition v2.0")
 
-# --- 🧠 FEED DATABASE ---
-if 'posts' not in st.session_state:
-    st.session_state.posts = [{
-        "user": "SYSTEM",
-        "content": "🚀 PostIT Secure is Live! Welcome to the network.",
-        "tag": "📢 Announcement",
-        "time": "04:30 PM",
-        "image": None,
-        "likes": 1000
-    }]
+    # --- THE SOCIAL PART ---
+    tab1, tab2 = st.tabs(["🌎 Global Feed", "✍️ Post Something"])
 
-# --- ✍️ CREATE A POST ---
-st.title(f"What's the genius plan today, {current_user}?")
+    with tab2:
+        new_post = st.text_area("What's on your mind?")
+        if st.button("Post to World"):
+            data = load_data()
+            data[st.session_state.user]["posts"].append(new_post)
+            save_data(data)
+            st.success("Posted!")
 
-with st.expander("➕ New Post", expanded=True):
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        post_text = st.text_area("Share your math formula or AI update...")
-        uploaded_img = st.file_uploader("📸 Attach an Image", type=['png', 'jpg', 'jpeg'])
-    with col2:
-        category = st.selectbox("Topic", ["Math Patterns 📐", "AI & Coding 🤖", "Science 🔬", "Victory Lounge 🏆"])
-        if st.button("🚀 PUBLISH"):
-            if post_text:
-                new_post = {
-                    "user": current_user,
-                    "content": post_text,
-                    "tag": category,
-                    "time": datetime.now().strftime("%I:%M %p"),
-                    "image": uploaded_img,
-                    "likes": 0
-                }
-                st.session_state.posts.insert(0, new_post)
-                st.balloons()
-
-st.divider()
-
-# --- 🌎 THE FEED ---
-for idx, p in enumerate(st.session_state.posts):
-    with st.container():
-        st.markdown(f"""
-            <div style="border: 2px solid #262730; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
-                <h4 style="margin:0;">{p['user']} <span style="font-size: 10px; color: gray;">({p['time']})</span></h4>
-                <p style="font-size: 16px; margin-top: 5px;">{p['content']}</p>
-            </div>
-        """, unsafe_allow_html=True)
+    with tab1:
+        st.subheader("Recent Activity")
+        data = load_data()
+        all_posts = []
+        for user, info in data.items():
+            for p in info.get("posts", []):
+                all_posts.append({"user": user, "content": p})
         
-        if p['image']:
-            st.image(p['image'], use_container_width=True)
-        
-        if st.button(f"⭐ {p['likes']}", key=f"like_{idx}_{p['user']}"):
-            st.session_state.posts[idx]['likes'] += 1
-            st.rerun()
+        for post in reversed(all_posts):
+            st.info(f"**{post['user']}**: {post['content']}")
